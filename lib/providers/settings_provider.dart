@@ -408,6 +408,20 @@ class SettingsProvider with ChangeNotifier {
     await _setAndSave(overrideData: {'readingAreaBorderWidth': value});
   }
 
+  /// 切换阅读区域框显示
+  Future<void> toggleReadingAreaVisible() async {
+    await _setAndSave(
+      overrideData: {'readingAreaVisible': !mergedSettings.readingAreaVisible},
+    );
+  }
+
+  /// 更新阅读区域框高度（行数）
+  Future<void> setReadingAreaLines(double value) async {
+    await _setAndSave(
+      overrideData: {'readingAreaLines': value.clamp(1.0, 6.0)},
+    );
+  }
+
   /// 切换进度条显示 - 已用时间
   Future<void> toggleProgressShowTime() async {
     await _setAndSave(

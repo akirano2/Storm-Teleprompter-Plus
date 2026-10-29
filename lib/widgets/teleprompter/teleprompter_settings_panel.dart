@@ -135,16 +135,28 @@ class _TeleprompterSettingsPanelState extends State<TeleprompterSettingsPanel> {
                           // ── 4. 阅读区域框设置 ──
                           _buildSectionTitle(context, '阅读区域框'),
                           const SizedBox(height: 8),
-                          _buildReadingAreaPositionSlider(
+                          _buildReadingAreaVisibleSwitch(
                             context,
                             provider,
                             settings,
                           ),
-                          _buildReadingAreaBorderSlider(
-                            context,
-                            provider,
-                            settings,
-                          ),
+                          if (settings.readingAreaVisible) ...[
+                            _buildReadingAreaLinesSlider(
+                              context,
+                              provider,
+                              settings,
+                            ),
+                            _buildReadingAreaPositionSlider(
+                              context,
+                              provider,
+                              settings,
+                            ),
+                            _buildReadingAreaBorderSlider(
+                              context,
+                              provider,
+                              settings,
+                            ),
+                          ],
                         ],
                       ],
                     ),
@@ -738,6 +750,45 @@ class _TeleprompterSettingsPanelState extends State<TeleprompterSettingsPanel> {
   }
 
   // ─── 阅读区域 ──────────────────────────────────────────
+
+  /// 显示/隐藏阅读区域框
+  Widget _buildReadingAreaVisibleSwitch(
+    BuildContext context,
+    SettingsProvider provider,
+    AppSettings settings,
+  ) {
+    return SwitchListTile(
+      dense: true,
+      secondary: const Icon(Icons.crop_free, size: 20),
+      title: const Text('显示阅读框', style: TextStyle(fontSize: 14)),
+      subtitle: const Text(
+        '关闭后正文照常定位，只是不再画金色框',
+        style: TextStyle(fontSize: 12),
+      ),
+      value: settings.readingAreaVisible,
+      onChanged: (_) => provider.toggleReadingAreaVisible(),
+    );
+  }
+
+  /// 阅读区域框高度（行）
+  Widget _buildReadingAreaLinesSlider(
+    BuildContext context,
+    SettingsProvider provider,
+    AppSettings settings,
+  ) {
+    return _buildSlider(
+      context,
+      icon: Icons.height,
+      title: '框高度',
+      value: settings.readingAreaLines,
+      min: 1,
+      max: 6,
+      divisions: 10,
+      displayFormatter: (v) => '${v.toStringAsFixed(1)} 行',
+      onChanged: (v) => provider.setReadingAreaLines(v),
+      onReset: () => provider.setReadingAreaLines(3),
+    );
+  }
 
   /// 边框粗细
   Widget _buildReadingAreaBorderSlider(

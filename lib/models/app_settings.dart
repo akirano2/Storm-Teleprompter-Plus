@@ -120,6 +120,12 @@ class AppSettings {
   /// 阅读区域框边框粗细（像素）
   final double readingAreaBorderWidth;
 
+  /// 是否显示阅读区域框
+  final bool readingAreaVisible;
+
+  /// 阅读区域框高度（按行数计，1~6 行）
+  final double readingAreaLines;
+
   /// 进度条显示 - 已用时间
   final bool progressShowTime;
 
@@ -183,6 +189,8 @@ class AppSettings {
     this.letterSpacing = 0.0,
     this.underlineCurrentChar = false,
     this.readingAreaBorderWidth = 3.0,
+    this.readingAreaVisible = true,
+    this.readingAreaLines = 3.0,
     this.progressShowTime = true,
     this.progressShowPercentage = true,
     this.progressShowSpeed = true,
@@ -243,6 +251,10 @@ class AppSettings {
       underlineCurrentChar: json['underlineCurrentChar'] as bool? ?? false,
       readingAreaBorderWidth:
           (json['readingAreaBorderWidth'] as num?)?.toDouble() ?? 3.0,
+      readingAreaVisible: json['readingAreaVisible'] as bool? ?? true,
+      readingAreaLines: ((json['readingAreaLines'] as num?)?.toDouble() ?? 3.0)
+          .clamp(1.0, 6.0)
+          .toDouble(),
       progressShowTime: json['progressShowTime'] as bool? ?? true,
       progressShowPercentage: json['progressShowPercentage'] as bool? ?? true,
       progressShowSpeed: json['progressShowSpeed'] as bool? ?? true,
@@ -295,6 +307,8 @@ class AppSettings {
       'letterSpacing': letterSpacing,
       'underlineCurrentChar': underlineCurrentChar,
       'readingAreaBorderWidth': readingAreaBorderWidth,
+      'readingAreaVisible': readingAreaVisible,
+      'readingAreaLines': readingAreaLines,
       'progressShowTime': progressShowTime,
       'progressShowPercentage': progressShowPercentage,
       'progressShowSpeed': progressShowSpeed,
@@ -343,6 +357,8 @@ class AppSettings {
     bool? defaultBold,
     bool? underlineCurrentChar,
     double? readingAreaBorderWidth,
+    bool? readingAreaVisible,
+    double? readingAreaLines,
     bool? progressShowTime,
     bool? progressShowPercentage,
     bool? progressShowSpeed,
@@ -394,6 +410,8 @@ class AppSettings {
       underlineCurrentChar: underlineCurrentChar ?? this.underlineCurrentChar,
       readingAreaBorderWidth:
           readingAreaBorderWidth ?? this.readingAreaBorderWidth,
+      readingAreaVisible: readingAreaVisible ?? this.readingAreaVisible,
+      readingAreaLines: readingAreaLines ?? this.readingAreaLines,
       progressShowTime: progressShowTime ?? this.progressShowTime,
       progressShowPercentage:
           progressShowPercentage ?? this.progressShowPercentage,
@@ -455,6 +473,11 @@ class AppSettings {
       readingAreaBorderWidth:
           (overrides['readingAreaBorderWidth'] as num?)?.toDouble() ??
           readingAreaBorderWidth,
+      readingAreaVisible:
+          overrides['readingAreaVisible'] as bool? ?? readingAreaVisible,
+      readingAreaLines:
+          (overrides['readingAreaLines'] as num?)?.toDouble() ??
+          readingAreaLines,
       teleprompterBgColor:
           overrides['teleprompterBgColor'] as int? ?? teleprompterBgColor,
       // 以下全局设置始终使用当前值，不被稿件覆盖
@@ -507,6 +530,8 @@ class AppSettings {
       'teleprompterBgColor': teleprompterBgColor,
       'underlineCurrentChar': underlineCurrentChar,
       'readingAreaBorderWidth': readingAreaBorderWidth,
+      'readingAreaVisible': readingAreaVisible,
+      'readingAreaLines': readingAreaLines,
       'progressShowTime': progressShowTime,
       'progressShowPercentage': progressShowPercentage,
       'progressShowSpeed': progressShowSpeed,

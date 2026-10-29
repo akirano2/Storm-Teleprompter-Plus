@@ -182,7 +182,8 @@ class _TeleprompterPageState extends State<TeleprompterPage>
                           _buildTextLayer(context, teleprompter, settings),
 
                           // ── 2. 阅读线指示器 ──
-                          if (!settings.isContinuousScroll)
+                          if (!settings.isContinuousScroll &&
+                              settings.readingAreaVisible)
                             _buildReadingLine(context, settings),
 
                           // ── 3. 顶部进度条（全幅 + 右侧信息） ──
@@ -1379,8 +1380,9 @@ class _TeleprompterPageState extends State<TeleprompterPage>
             : defaultRatio);
     // 每行实际高度 = fontSize * lineHeight（文本） + 4（Padding vertical:2 上下各2px）
     final perLineHeight = settings.fontSize * settings.lineHeight + 4;
-    // 阅读区域高度 = 3 行（与原版一致，修正 padding 的影响）
-    final areaHeight = perLineHeight * 3 - 2; // 略减2px避免与上下行边界重叠
+    // 阅读区域高度按用户设定的行数计算（默认 3 行，修正 padding 的影响）
+    final areaHeight =
+        perLineHeight * settings.readingAreaLines.clamp(1.0, 6.0) - 2;
     // 水平边距计算（与文本层一致）
     final basePadding = isMobile
         ? TeleprompterConstants.mobileHorizontalPadding
