@@ -43,6 +43,9 @@ class TeleprompterTextLayer extends StatefulWidget {
   final bool defaultBold;
   final bool underlineCurrentChar;
 
+  /// 平滑跟随：把字在行内的位置折算成纵向偏移，正文随朗读进度连续滑动。
+  final bool smoothFollow;
+
   const TeleprompterTextLayer({
     super.key,
     required this.scrollController,
@@ -71,6 +74,7 @@ class TeleprompterTextLayer extends StatefulWidget {
     this.highlightCurrentChar = false,
     this.defaultBold = false,
     this.underlineCurrentChar = false,
+    this.smoothFollow = true,
   });
 
   @override
@@ -317,6 +321,68 @@ class TeleprompterTextLayerState extends State<TeleprompterTextLayer>
         .toDouble();
   }
 
+  /// 计算当前字在视觉行内的连续纵向位置。
+  ///
+  /// 按行定位原本把整行固定在阅读线中心：字在行内前进时正文不动，跨行时
+  /// 整行跳一格。这里把字在该视觉行内的序号折算成行内偏移，跨行处首尾相接，
+  /// 于是字符推进时正文连续上滑，而不是逐行跳动。
+  double _visualRowFollowYForRawIndex(
+    int lineIndex,
+    int rawIndex,
+    double textWidth,
+    TextDirection textDirection,
+  ) {
+    final line = widget.lines[lineIndex];
+    if (line.characters.isEmpty) {
+      return _lineHeights[lineIndex] / 2;
+    }
+
+    final painter = _layoutLinePainter(line, textWidth, textDirection);
+    final charOffset = _charOffsetInLine(lineIndex, rawIndex);
+    final caretOffset = painter.getOffsetForCaret(
+      TextPosition(offset: charOffset),
+      Rect.zero,
+    );
+
+    var rowTop = 0.0;
+    var rowHeight = painter.preferredLineHeight;
+    for (final metric in painter.computeLineMetrics()) {
+      final top = metric.baseline - metric.ascent;
+      final bottom = top + metric.height;
+      if (caretOffset.dy >= top - 0.5 && caretOffset.dy <= bottom + 0.5) {
+        rowTop = top;
+        rowHeight = metric.height;
+        break;
+      }
+    }
+
+    // 用同一视觉行的首尾字符得到字在行内的序号，短行也能平滑衔接到下一行。
+    final rowCenterY = rowTop + rowHeight / 2;
+    final lastIndex = line.characters.length - 1;
+    final firstOffset = painter
+        .getPositionForOffset(Offset(0, rowCenterY))
+        .offset
+        .clamp(0, lastIndex)
+        .toInt();
+    final lastOffset = painter
+        .getPositionForOffset(Offset(textWidth, rowCenterY))
+        .offset
+        .clamp(firstOffset, lastIndex)
+        .toInt();
+    final rowCharCount = (lastOffset - firstOffset + 1).clamp(
+      1,
+      line.characters.length,
+    );
+    final indexInRow = (charOffset - firstOffset).clamp(0, rowCharCount - 1);
+    final progress = (indexInRow + 1) / rowCharCount;
+
+    painter.dispose();
+
+    return (rowTop + rowHeight * progress + _lineVerticalPadding)
+        .clamp(0.0, _lineHeights[lineIndex])
+        .toDouble();
+  }
+
   void _ensureLineMetrics(double textWidth, TextDirection textDirection) {
     final widthChanged =
         _lastTextWidth == null || (_lastTextWidth! - textWidth).abs() > 0.5;
@@ -557,15 +623,21 @@ class TeleprompterTextLayerState extends State<TeleprompterTextLayer>
 
     final targetLine = _findLineForRawIndex(widget.currentIndex);
     final safeLine = targetLine.clamp(0, _lineHeights.length - 1).toInt();
-    final rowCenter =
-        _topPad(viewportHeight) +
-        _lineTops[safeLine] +
-        _visualRowCenterForRawIndex(
-          safeLine,
-          widget.currentIndex,
-          textWidth,
-          textDirection,
-        );
+    // 平滑跟随按行内进度取纵向位置，关闭后回到整行居中定位。
+    final rowY = widget.smoothFollow
+        ? _visualRowFollowYForRawIndex(
+            safeLine,
+            widget.currentIndex,
+            textWidth,
+            textDirection,
+          )
+        : _visualRowCenterForRawIndex(
+            safeLine,
+            widget.currentIndex,
+            textWidth,
+            textDirection,
+          );
+    final rowCenter = _topPad(viewportHeight) + _lineTops[safeLine] + rowY;
     final targetOffset =
         (rowCenter - _readingLineY(viewportHeight, viewportWidth))
             .clamp(0.0, maxScroll)
@@ -578,10 +650,13 @@ class TeleprompterTextLayerState extends State<TeleprompterTextLayer>
     final shouldAnimate = animate || (widget.autoFollow && offsetDelta > 1.0);
 
     if (shouldAnimate) {
-      _animateToOffset(
-        targetOffset,
-        Duration(milliseconds: widget.autoFollow ? 150 : 190),
-      );
+      // 平滑跟随时位移越小动画越短，连续重定目标才不会互相打断而抖动。
+      final duration = widget.smoothFollow
+          ? Duration(
+              milliseconds: (90 + offsetDelta * 1.5).clamp(90, 420).round(),
+            )
+          : Duration(milliseconds: widget.autoFollow ? 150 : 190);
+      _animateToOffset(targetOffset, duration);
     } else {
       _jumpToOffset(targetOffset);
     }

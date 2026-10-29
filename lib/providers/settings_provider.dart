@@ -366,6 +366,13 @@ class SettingsProvider with ChangeNotifier {
     await _setAndSave(overrideData: {'textColor': hexColor});
   }
 
+  /// 切换平滑跟随（正文随朗读进度连续滑动）
+  Future<void> toggleSmoothFollow() async {
+    await _setAndSave(
+      overrideData: {'smoothFollow': !mergedSettings.smoothFollow},
+    );
+  }
+
   /// 更新字间距
   Future<void> setLetterSpacing(double value) async {
     await _setAndSave(overrideData: {'letterSpacing': value});

@@ -83,8 +83,15 @@ class _TeleprompterSettingsPanelState extends State<TeleprompterSettingsPanel> {
                           provider,
                           settings,
                         ),
+                        _buildTeleprompterTextColorTile(
+                          context,
+                          provider,
+                          settings,
+                        ),
                         _buildMirrorTextSwitch(context, provider, settings),
                         _buildExtraBoldSlider(context, provider, settings),
+                        if (!settings.isContinuousScroll)
+                          _buildSmoothFollowSwitch(context, provider, settings),
                         const SizedBox(height: 4),
                         if (!settings.isContinuousScroll)
                           _buildEmphasisSection(context, provider, settings),
@@ -453,6 +460,39 @@ class _TeleprompterSettingsPanelState extends State<TeleprompterSettingsPanel> {
     );
   }
 
+  /// 正文颜色：0 表示按背景色自动取黑白。
+  Widget _buildTeleprompterTextColorTile(
+    BuildContext context,
+    SettingsProvider provider,
+    AppSettings settings,
+  ) {
+    final isAuto = settings.textColor == 0;
+    final color = isAuto ? const Color(0xFFFFFFFF) : Color(settings.textColor);
+    return _buildValueItem(
+      leading: Container(
+        width: 18,
+        height: 18,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(5),
+          border: Border.all(color: AppColors.border),
+        ),
+      ),
+      title: '字体颜色',
+      value: isAuto ? '自动' : _formatHex(color),
+      onTap: () => _showColorPicker(
+        context,
+        title: '选择字体颜色',
+        currentColor: color,
+        resetColor: const Color(0xFFFFFFFF),
+        resetLabel: '自动',
+        onReset: () => provider.setTextColor(0),
+        onColorSelected: (selected) =>
+            provider.setTextColor(selected.toARGB32()),
+      ),
+    );
+  }
+
   Widget _buildValueItem({
     required Widget leading,
     required String title,
@@ -627,6 +667,25 @@ class _TeleprompterSettingsPanelState extends State<TeleprompterSettingsPanel> {
       title: const Text('默认加粗', style: TextStyle(fontSize: 14)),
       value: settings.defaultBold,
       onChanged: (_) => provider.toggleDefaultBold(),
+    );
+  }
+
+  /// 平滑跟随：正文随朗读进度连续滑动，而不是逐行跳动。
+  Widget _buildSmoothFollowSwitch(
+    BuildContext context,
+    SettingsProvider provider,
+    AppSettings settings,
+  ) {
+    return SwitchListTile(
+      dense: true,
+      secondary: const Icon(Icons.slow_motion_video, size: 20),
+      title: const Text('平滑跟随', style: TextStyle(fontSize: 14)),
+      subtitle: const Text(
+        '正文随朗读进度连续滑动，不再逐行跳动',
+        style: TextStyle(fontSize: 12),
+      ),
+      value: settings.smoothFollow,
+      onChanged: (_) => provider.toggleSmoothFollow(),
     );
   }
 
@@ -816,15 +875,20 @@ class _TeleprompterSettingsPanelState extends State<TeleprompterSettingsPanel> {
 
   Future<void> _showColorPicker(
     BuildContext context, {
+    String title = '选择背景色',
     required Color currentColor,
+    Color resetColor = const Color(0xFF000000),
+    String resetLabel = '恢复黑色',
+    VoidCallback? onReset,
     required ValueChanged<Color> onColorSelected,
   }) async {
     final selected = await AppColorPickerDialog.show(
       context,
-      title: '选择背景色',
+      title: title,
       currentColor: currentColor,
-      resetColor: const Color(0xFF000000),
-      resetLabel: '恢复黑色',
+      resetColor: resetColor,
+      resetLabel: resetLabel,
+      onReset: onReset,
     );
     if (mounted && selected != null) onColorSelected(selected);
   }

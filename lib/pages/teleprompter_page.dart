@@ -1354,6 +1354,7 @@ class _TeleprompterPageState extends State<TeleprompterPage>
           highlightCurrentChar: settings.highlightCurrentChar,
           defaultBold: settings.defaultBold,
           underlineCurrentChar: settings.underlineCurrentChar,
+          smoothFollow: settings.smoothFollow,
         ),
       ),
     );

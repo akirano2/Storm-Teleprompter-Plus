@@ -108,6 +108,9 @@ class AppSettings {
   /// 字体颜色（0 表示自动根据背景色选择黑白）
   final int textColor;
 
+  /// 正文是否随朗读进度连续滑动；关闭后恢复逐行跳动的定位方式。
+  final bool smoothFollow;
+
   /// 字间距（像素）
   final double letterSpacing;
 
@@ -176,6 +179,7 @@ class AppSettings {
     this.teleprompterFontFamily = 'Noto Sans SC',
     this.grayReadChars = true,
     this.textColor = 0,
+    this.smoothFollow = true,
     this.letterSpacing = 0.0,
     this.underlineCurrentChar = false,
     this.readingAreaBorderWidth = 3.0,
@@ -234,6 +238,7 @@ class AppSettings {
           json['teleprompterFontFamily'] as String? ?? 'Noto Sans SC',
       grayReadChars: json['grayReadChars'] as bool? ?? true,
       textColor: json['textColor'] as int? ?? 0,
+      smoothFollow: json['smoothFollow'] as bool? ?? true,
       letterSpacing: (json['letterSpacing'] as num?)?.toDouble() ?? 0.0,
       underlineCurrentChar: json['underlineCurrentChar'] as bool? ?? false,
       readingAreaBorderWidth:
@@ -286,6 +291,7 @@ class AppSettings {
       'teleprompterFontFamily': teleprompterFontFamily,
       'grayReadChars': grayReadChars,
       'textColor': textColor,
+      'smoothFollow': smoothFollow,
       'letterSpacing': letterSpacing,
       'underlineCurrentChar': underlineCurrentChar,
       'readingAreaBorderWidth': readingAreaBorderWidth,
@@ -331,6 +337,7 @@ class AppSettings {
     String? teleprompterFontFamily,
     bool? grayReadChars,
     int? textColor,
+    bool? smoothFollow,
     double? letterSpacing,
     bool? highlightCurrentChar,
     bool? defaultBold,
@@ -380,6 +387,7 @@ class AppSettings {
           teleprompterFontFamily ?? this.teleprompterFontFamily,
       grayReadChars: grayReadChars ?? this.grayReadChars,
       textColor: textColor ?? this.textColor,
+      smoothFollow: smoothFollow ?? this.smoothFollow,
       letterSpacing: letterSpacing ?? this.letterSpacing,
       highlightCurrentChar: highlightCurrentChar ?? this.highlightCurrentChar,
       defaultBold: defaultBold ?? this.defaultBold,
@@ -439,6 +447,7 @@ class AppSettings {
           teleprompterFontFamily,
       grayReadChars: overrides['grayReadChars'] as bool? ?? grayReadChars,
       textColor: overrides['textColor'] as int? ?? textColor,
+      smoothFollow: overrides['smoothFollow'] as bool? ?? smoothFollow,
       letterSpacing:
           (overrides['letterSpacing'] as num?)?.toDouble() ?? letterSpacing,
       underlineCurrentChar:
@@ -493,6 +502,7 @@ class AppSettings {
       'teleprompterFontFamily': teleprompterFontFamily,
       'grayReadChars': grayReadChars,
       'textColor': textColor,
+      'smoothFollow': smoothFollow,
       'letterSpacing': letterSpacing,
       'teleprompterBgColor': teleprompterBgColor,
       'underlineCurrentChar': underlineCurrentChar,
