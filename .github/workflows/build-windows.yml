@@ -1,0 +1,60 @@
+name: build-windows
+
+# 只做一件事：在 GitHub 的 Windows 服务器上把项目编译成可运行的程序，
+# 产物放在 Actions 页面的 Artifacts 里，下载后覆盖本地安装目录即可。
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "v2"
+      - "main"
+      - "master"
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: "3.44.1"
+  APP_NAME: storm_teleprompter_plus
+
+jobs:
+  windows:
+    name: Build Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      # 代码检查只作参考，不阻断打包。
+      - name: 代码检查（仅供参考）
+        continue-on-error: true
+        shell: powershell
+        run: |
+          flutter pub get
+          flutter analyze --no-pub
+
+      # 单元测试只作参考，失败不阻断打包，保证一定能拿到可运行的程序。
+      - name: 单元测试（仅供参考）
+        continue-on-error: true
+        shell: powershell
+        run: flutter test --no-pub
+
+      - name: 编译 Windows 版本
+        shell: powershell
+        run: |
+          $version = $env:GITHUB_SHA.Substring(0, 8)
+          flutter config --enable-windows-desktop
+          flutter build windows --release --dart-define=APP_VERSION=$version
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath artifacts\${env:APP_NAME}-windows-x64.zip -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: storm-teleprompter-windows
+          path: artifacts/*.zip
+          if-no-files-found: error
