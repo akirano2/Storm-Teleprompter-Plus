@@ -62,6 +62,9 @@ class _TeleprompterPageState extends State<TeleprompterPage>
   DateTime? _lastPauseShortcutAt;
   int _lastAutoFollowIndex = -2;
   Timer? _remoteRetryTimer;
+
+  /// 进度条拖动中的预览位置（null 表示没有在拖动）。
+  double? _seekRatio;
   final FocusNode _pageFocusNode = FocusNode(debugLabel: 'TeleprompterPage');
 
   @override
@@ -186,11 +189,9 @@ class _TeleprompterPageState extends State<TeleprompterPage>
                               settings.readingAreaVisible)
                             _buildReadingLine(context, settings),
 
-                          // ── 3. 顶部进度条（全幅 + 右侧信息） ──
-                          if (teleprompter.isPlaying ||
-                              (settings.scrollMode == ScrollMode.auto &&
-                                  teleprompter.state ==
-                                      TeleprompterState.paused))
+                          // ── 3. 顶部进度条（可拖动跳转） ──
+                          if (teleprompter.state == TeleprompterState.playing ||
+                              teleprompter.state == TeleprompterState.paused)
                             _buildTopProgressBar(
                               context,
                               teleprompter,
@@ -407,6 +408,8 @@ class _TeleprompterPageState extends State<TeleprompterPage>
     AppSettings settings,
   ) {
     final progress = teleprompter.progress;
+    // 拖动时先预览，松手后再真正跳转。
+    final shownProgress = _seekRatio ?? progress;
     final elapsed = teleprompter.elapsed;
     // 进度条右侧文字大小 = 正文的 settings.progressInfoSizeRatio (默认 60%)
     final infoFontSize = settings.fontSize * settings.progressInfoSizeRatio;
@@ -446,7 +449,7 @@ class _TeleprompterPageState extends State<TeleprompterPage>
       // 百分比
       if (settings.progressShowPercentage) ...[
         Text(
-          '${(progress * 100).round()}%',
+          '${(shownProgress * 100).round()}%',
           style: TextStyle(
             color: AppColors.textMuted,
             fontSize: clampedFontSize,
@@ -471,65 +474,213 @@ class _TeleprompterPageState extends State<TeleprompterPage>
       ],
     ];
 
-    return Positioned(
-      top: 0,
-      left: 0,
-      right: 0,
-      child: GestureDetector(
-        onTap: () {}, // 拦截点击，不触发父级
-        child: _mirrorPromptOverlayIfNeeded(
-          settings: settings,
-          child: SizedBox(
+    return Positioned.fill(
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
             height: barHeight,
-            child: Stack(
-              children: [
-                // 进度条背景
-                Positioned.fill(
-                  child: Container(
-                    color: AppColors.background.withValues(alpha: 0.6),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final width = constraints.maxWidth;
+                double ratioAt(double dx) =>
+                    width <= 0 ? 0.0 : (dx / width).clamp(0.0, 1.0).toDouble();
+                return GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTapUp: (details) => _seekToRatio(
+                    ratioAt(details.localPosition.dx),
+                    teleprompter,
+                    settings,
                   ),
-                ),
-                // 进度条填充
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  bottom: 0,
-                  width: MediaQuery.of(context).size.width * progress,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          _primaryFromSettings(settings).withValues(alpha: 0.8),
-                          _primaryFromSettings(settings),
+                  onHorizontalDragStart: (details) => setState(
+                    () => _seekRatio = ratioAt(details.localPosition.dx),
+                  ),
+                  onHorizontalDragUpdate: (details) => setState(
+                    () => _seekRatio = ratioAt(details.localPosition.dx),
+                  ),
+                  onHorizontalDragCancel: () =>
+                      setState(() => _seekRatio = null),
+                  onHorizontalDragEnd: (_) {
+                    final ratio = _seekRatio;
+                    setState(() => _seekRatio = null);
+                    if (ratio != null) {
+                      _seekToRatio(ratio, teleprompter, settings);
+                    }
+                  },
+                  child: _mirrorPromptOverlayIfNeeded(
+                    settings: settings,
+                    child: SizedBox(
+                      height: barHeight,
+                      child: Stack(
+                        children: [
+                          // 进度条背景
+                          Positioned.fill(
+                            child: Container(
+                              color: AppColors.background.withValues(
+                                alpha: 0.6,
+                              ),
+                            ),
+                          ),
+                          // 进度条填充
+                          Positioned(
+                            top: 0,
+                            left: 0,
+                            bottom: 0,
+                            width: width * shownProgress,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    _primaryFromSettings(
+                                      settings,
+                                    ).withValues(alpha: 0.8),
+                                    _primaryFromSettings(settings),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          // 拖动位置指示线
+                          if (_seekRatio != null)
+                            Positioned(
+                              top: 0,
+                              bottom: 0,
+                              left: (width * _seekRatio! - 1)
+                                  .clamp(0.0, width - 2)
+                                  .toDouble(),
+                              width: 2,
+                              child: Container(color: Colors.white),
+                            ),
+                          // 右侧信息（自动根据文本宽度调整）
+                          Positioned(
+                            top: 0,
+                            left: 8,
+                            right: 8,
+                            bottom: 0,
+                            child: Align(
+                              alignment: Alignment.centerRight,
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerRight,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: infoChildren,
+                                ),
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
                   ),
-                ),
-                // 右侧信息（自动根据文本宽度调整）
-                Positioned(
-                  top: 0,
-                  left: 8,
-                  right: 8,
-                  bottom: 0,
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerRight,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: infoChildren,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+                );
+              },
             ),
           ),
-        ),
+          // 拖动时的行号气泡
+          if (_seekRatio != null)
+            Positioned(
+              top: barHeight + 8,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: _buildSeekBubble(teleprompter, settings, _seekRatio!),
+              ),
+            ),
+        ],
       ),
     );
+  }
+
+  /// 拖动进度条时的时间/行号预览气泡。
+  Widget _buildSeekBubble(
+    TeleprompterProvider teleprompter,
+    AppSettings settings,
+    double ratio,
+  ) {
+    final totalLines = teleprompter.lines.length;
+    final lineIndex = totalLines == 0
+        ? 0
+        : (ratio * totalLines).floor().clamp(0, totalLines - 1).toInt();
+    final preview = _linePreviewText(teleprompter, lineIndex);
+    final percent = (ratio * 100).round();
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 520),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.86),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: _primaryFromSettings(settings).withValues(alpha: 0.6),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            totalLines == 0
+                ? '$percent%'
+                : '第 ${lineIndex + 1} / $totalLines 行 · $percent%',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (preview.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                preview,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white70, fontSize: 13),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// 取某一行的开头文字，供拖动预览显示。
+  String _linePreviewText(TeleprompterProvider teleprompter, int lineIndex) {
+    final lines = teleprompter.lines;
+    if (lineIndex < 0 || lineIndex >= lines.length) return '';
+    final buffer = StringBuffer();
+    for (final character in lines[lineIndex].characters) {
+      buffer.write(character.char);
+      if (buffer.length >= 18) break;
+    }
+    return buffer.toString();
+  }
+
+  /// 跳转到指定进度：按行模式定位字符，匀速模式直接定位视口。
+  void _seekToRatio(
+    double ratio,
+    TeleprompterProvider teleprompter,
+    AppSettings settings,
+  ) {
+    final value = ratio.clamp(0.0, 1.0).toDouble();
+    if (settings.isContinuousScroll) {
+      if (scrollController.hasClients) {
+        final maxScroll = scrollController.position.maxScrollExtent;
+        scrollController.jumpTo(
+          (maxScroll * value).clamp(0.0, maxScroll).toDouble(),
+        );
+      }
+      teleprompter.setViewportProgress(value);
+      return;
+    }
+    final index = teleprompter.rawIndexForProgress(value);
+    if (index < 0) return;
+    teleprompter.setCurrentIndex(index);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      textLayerKey.currentState?.scrollToCurrentChar(animate: false);
+    });
   }
 
   // ─── 顶部导航栏（浮动样式，可隐藏） ──────────────────

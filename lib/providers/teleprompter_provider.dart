@@ -382,6 +382,14 @@ class TeleprompterProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  /// 按进度 (0~1) 换算成原稿字符索引，供进度条拖动跳转。
+  int rawIndexForProgress(double value) {
+    if (_totalChars <= 0) return -1;
+    final ratio = value.clamp(0.0, 1.0).toDouble();
+    final ordinal = (ratio * (_totalChars - 1)).round();
+    return _rawIndexAtOrdinal(ordinal);
+  }
+
   /// 重置到开头
   void reset() {
     _viewportSeekRevision++;

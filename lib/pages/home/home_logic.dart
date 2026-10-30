@@ -385,11 +385,32 @@ mixin HomeLogic on State<HomePage>, HomeQuickMode {
     var importedCount = 0;
     var importedFolderCount = 0;
     final batch = await _importService.importPaths(paths);
+
+    // 多段文件先问一次：整篇导入，还是每段拆成一篇稿件。
+    final splitChoice = await _askParagraphSplit([
+      for (final file in batch.files) file.article.content,
+    ]);
+    if (splitChoice == null) {
+      if (!mounted) return;
+      setState(() {
+        _isImporting = false;
+        _importProgress = null;
+        _importStatusText = '';
+      });
+      return;
+    }
+    final splitParagraphs = splitChoice == 'split';
+
     final errors = [...batch.failures];
     final folderIds = <String, String>{};
     final folders = [...batch.folders]
       ..sort((a, b) => a.relativePath.length.compareTo(b.relativePath.length));
-    final totalSteps = folders.length + batch.files.length;
+    var fileSteps = 0;
+    for (final file in batch.files) {
+      final parts = _paragraphHtmlParts(file.article.content).length;
+      fileSteps += splitParagraphs ? (parts == 0 ? 1 : parts) : 1;
+    }
+    final totalSteps = folders.length + fileSteps;
     var completedSteps = 0;
 
     for (final draft in folders) {
@@ -429,6 +450,24 @@ mixin HomeLogic on State<HomePage>, HomeQuickMode {
           : folderIds[_folderPathKey(file.relativeFolderPath)];
       if (file.relativeFolderPath.isNotEmpty && folderId == null) {
         errors.add('${_fileName(file.sourcePath)}: 目标文件夹创建失败');
+      } else if (splitParagraphs &&
+          _paragraphHtmlParts(file.article.content).length > 1) {
+        // 一个文件里的每一段各自生成一篇稿件。
+        for (final part in _paragraphHtmlParts(file.article.content)) {
+          final article = await articleProvider.createArticle(
+            title: _paragraphTitle(part, file.article.title),
+            content: part,
+            folderId: folderId,
+          );
+          if (article == null) {
+            errors.add('${_fileName(file.sourcePath)}: 创建失败');
+          } else {
+            importedCount++;
+          }
+          completedSteps++;
+          _updateImportProgress(completedSteps, totalSteps, '正在导入稿件...');
+        }
+        continue;
       } else {
         final article = await articleProvider.createArticle(
           title: file.article.title.isEmpty ? '未命名稿件' : file.article.title,
@@ -467,6 +506,80 @@ mixin HomeLogic on State<HomePage>, HomeQuickMode {
     } else {
       _showImportSnackBar('没有可导入的 txt/docx 文件');
     }
+  }
+
+  /// 询问多段文件是否按段落拆分成多篇稿件。
+  ///
+  /// 返回 'split'（每段一篇）、'merge'（整篇导入）；用户取消时返回 null。
+  Future<String?> _askParagraphSplit(List<String> contents) async {
+    var multiCount = 0;
+    var maxParts = 0;
+    for (final content in contents) {
+      final count = _paragraphHtmlParts(content).length;
+      if (count > 1) {
+        multiCount++;
+        if (count > maxParts) maxParts = count;
+      }
+    }
+    if (multiCount == 0) return 'merge';
+    if (!mounted) return 'merge';
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('按段落拆分？'),
+        content: Text(
+          '检测到 $multiCount 个文件包含多个段落（最多 $maxParts 段）。\n\n'
+          '每段一篇：每一段生成一篇稿件，适合一个文件里放了好几篇文案。\n'
+          '合并一篇：保持原样，整个文件导入为一篇稿件。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'merge'),
+            child: const Text('合并一篇'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, 'split'),
+            child: const Text('每段一篇'),
+          ),
+        ],
+      ),
+    );
+    return result;
+  }
+
+  /// 把 HTML 正文按段落拆开，忽略空段与纯空白段。
+  List<String> _paragraphHtmlParts(String html) {
+    final parts = <String>[];
+    final paragraph = RegExp(r'<p\b[^>]*>[\s\S]*?</p>', caseSensitive: false);
+    for (final match in paragraph.allMatches(html)) {
+      final fragment = (match.group(0) ?? '').trim();
+      if (fragment.isEmpty) continue;
+      if (_plainTextOf(fragment).isEmpty) continue;
+      parts.add(fragment);
+    }
+    if (parts.isEmpty && _plainTextOf(html).isNotEmpty) {
+      parts.add(html.trim());
+    }
+    return parts;
+  }
+
+  /// 去掉 HTML 标签并压缩空白，用于标题与空段判断。
+  String _plainTextOf(String html) => html
+      .replaceAll(RegExp(r'<[^>]+>'), '')
+      .replaceAll('&nbsp;', ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+
+  /// 拆分后的稿件标题：取段落开头，避免多篇同名。
+  String _paragraphTitle(String html, String fallback) {
+    final text = _plainTextOf(html);
+    if (text.isEmpty) return fallback.isEmpty ? '未命名稿件' : fallback;
+    return text.length <= 20 ? text : text.substring(0, 20);
   }
 
   void _updateImportProgress(int completed, int total, String status) {
